@@ -33,7 +33,16 @@ namespace EventStoreBasics
 
         private void CreateEventsTable()
         {
-            throw new NotImplementedException("Add here create table sql run with Dapper");
+            const string createEventTable =
+                @"CREATE TABLE Events(
+                    id UUID NOT NULL PRIMARY KEY,
+                    data JSONB,
+                    stream_id UUID,
+                    type TEXT,
+                    version BIGINT,
+                    created TIMESTAMP WITH TIME ZONE 
+                );";
+            databaseConnection.Execute(createEventTable);
         }
 
         public void Dispose()
