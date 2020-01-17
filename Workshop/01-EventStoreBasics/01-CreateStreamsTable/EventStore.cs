@@ -1,4 +1,5 @@
 using System;
+using Dapper;
 using Npgsql;
 
 namespace EventStoreBasics
@@ -12,6 +13,11 @@ namespace EventStoreBasics
             this.databaseConnection = databaseConnection;
         }
 
+        public void Dispose()
+        {
+            databaseConnection.Dispose();
+        }
+
         public void Init()
         {
             // See more in Greg Young's "Building an Event Storage" article https://cqrs.wordpress.com/documents/building-event-storage/
@@ -20,12 +26,12 @@ namespace EventStoreBasics
 
         private void CreateStreamsTable()
         {
-            throw new NotImplementedException("Add here create table sql run with Dapper");
-        }
-
-        public void Dispose()
-        {
-            databaseConnection.Dispose();
+            const string createStreamsTable = @"CREATE TABLE streams(
+                    id uuid,
+                    type text,
+                    version bigint
+                )";
+            databaseConnection.Execute(createStreamsTable);
         }
     }
 }
