@@ -1,5 +1,6 @@
 using System;
 using System.Data;
+using System.Text.Json;
 using Dapper;
 using Npgsql;
 
@@ -28,13 +29,13 @@ namespace EventStoreBasics
             var eventId = Guid.NewGuid();
 
             //2. Serialize event data to JSON
-            string eventData = null; // TODO: Add here @event serialization
+            string eventData = JsonSerializer.Serialize(@event);
 
             //3. Send event type
-            string eventType = null; // TODO: Add here getting event type name
+            string eventType = @event.GetType().ToString();
 
             //4. Send stream type
-            string streamType = null; // TODO: Add here getting stream type
+            string streamType = typeof(TStream).ToString();
 
             return databaseConnection.QuerySingle<bool>(
                 "SELECT append_event(@Id, @Data::jsonb, @Type, @StreamId, @StreamType, @ExpectedVersion)",
@@ -91,16 +92,20 @@ namespace EventStoreBasics
                 ) RETURNS boolean
                 LANGUAGE plpgsql
                 AS $$
+                DECLARE
+                    stream_version bigint;
                 BEGIN
 
                     -- 1. Insert into stream table if there is no stream with provided streamId
-                    -- TODO
-
+                        IF NOT EXISTS (SELECT 1 FROM streams s WHERE s.id = stream_id) THEN
+                          INSERT INTO streams (id, type, version) VALUES (stream_id, stream_type, expected_stream_version);
+                        END IF;
                     -- 2. Insert new row into events table with version equal to expected_stream_version + 1
-                    -- TODO
-
+                       stream_version := 1;
+                       INSERT INTO events (id, data, stream_id, type, version)
+                            VALUES ((select s.id from streams s where s.id = stream_id), data, stream_id, stream_type, stream_version);
                     -- 3. Update stream version with expected_stream_version + 1
-                    -- TODO
+                       UPDATE streams s SET version = stream_version WHERE s.id = stream_id;
 
                     RETURN TRUE;
                 END;
