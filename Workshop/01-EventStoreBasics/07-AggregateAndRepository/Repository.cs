@@ -13,22 +13,22 @@ namespace EventStoreBasics
 
         public T Find(Guid id)
         {
-            throw new NotImplementedException("Get aggregate state by aggregating stream");
+            return eventStore.AggregateStream<T>(id);
         }
 
         public void Add(T aggregate)
         {
-            throw new NotImplementedException("Add new stream and events");
+            eventStore.Store(aggregate);
         }
 
         public void Update(T aggregate)
         {
-            throw new NotImplementedException("Add new events to existing stream");
+            eventStore.Store(aggregate);
         }
 
         public void Delete(T aggregate)
         {
-            throw new NotImplementedException("Add delete event to stream");
+            eventStore.Store(aggregate);
         }
     }
 }
