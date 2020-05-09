@@ -55,8 +55,11 @@ namespace EventStoreBasics
 
             foreach (var @event in events)
             {
-                aggregate.InvokeIfExists(Apply, @event);
-                aggregate.SetIfExists(Version, ++version);
+                if(atStreamVersion.HasValue && version < atStreamVersion)
+                {
+                    aggregate.InvokeIfExists(Apply, @event);
+                    aggregate.SetIfExists(Version, ++version);
+                }
             }
 
             return aggregate;
