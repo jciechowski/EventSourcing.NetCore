@@ -3,6 +3,7 @@ using System.Collections;
 using System.Data;
 using System.Linq;
 using Dapper;
+using EventStoreBasics.Tools;
 using Newtonsoft.Json;
 using Npgsql;
 
@@ -46,11 +47,23 @@ namespace EventStoreBasics
 
         public T AggregateStream<T>(Guid streamId)
         {
+            var aggregate = Activator.CreateInstance(typeof(T), true);
+
+            var events = GetEvents(streamId);
+
+            var version = 0;
+
+            foreach (var @event in events)
+            {
+                aggregate.InvokeIfExists(Apply, @event);
+                aggregate.SetIfExists("Version", ++version);
+            }
+
+            return (T)aggregate;
             // 1. Create instance
             // 2. Get Stream Events
             // 3. For each event call apply method on aggregate and increment aggregate version
             // 4. Return Aggregate
-            throw new NotImplementedException("Implement aggregation based on the description above");
         }
 
         public StreamState GetStreamState(Guid streamId)
