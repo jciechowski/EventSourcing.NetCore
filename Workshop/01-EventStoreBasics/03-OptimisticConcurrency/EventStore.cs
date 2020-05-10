@@ -1,6 +1,8 @@
 using System;
 using System.Data;
+using System.Text.Json;
 using Dapper;
+using Marten;
 using Npgsql;
 
 namespace EventStoreBasics
@@ -28,13 +30,13 @@ namespace EventStoreBasics
             var eventId = Guid.NewGuid();
 
             //2. Serialize event data to JSON
-            string eventData = null; // TODO: Add here @event serialization
+            string eventData = JsonSerializer.Serialize(@event); // TODO: Add here @event serialization
 
             //3. Send event type
-            string eventType = null; // TODO: Add here getting event type name
+            string eventType = @event.GetType().ToString(); // TODO: Add here getting event type name
 
             //4. Send stream type
-            string streamType = null; // TODO: Add here getting stream type
+            string streamType = typeof(TStream).ToString(); // TODO: Add here getting stream type
 
             return databaseConnection.QuerySingle<bool>(
                 "SELECT append_event(@Id, @Data::jsonb, @Type, @StreamId, @StreamType, @ExpectedVersion)",
@@ -81,33 +83,46 @@ namespace EventStoreBasics
         private void CreateAppendEventFunction()
         {
             const string AppendEventFunctionSQL =
-                @"CREATE OR REPLACE FUNCTION append_event(id uuid, data text, type text, stream_id uuid, stream_type text, expected_stream_version bigint default null) RETURNS boolean
-                LANGUAGE plpgsql
-                AS $$
-                DECLARE
-                    stream_version int;
-                BEGIN
-                    -- 1. get stream version
-                    -- TODO
+                 @"CREATE OR REPLACE FUNCTION append_event(
+                     id uuid,
+                     data jsonb,
+                     type text,
+                     stream_id uuid,
+                     stream_type text,
+                     expected_stream_version bigint default null)
+                 RETURNS boolean
+                 LANGUAGE plpgsql
+                 AS $$
+                 DECLARE
+                     stream_version int;
+                 BEGIN
+                     -- 1. get stream version
+                     SELECT version INTO stream_version FROM streams s WHERE s.id = stream_id;
 
-                    -- 2. if stream doesn't exist - create new one with version 0
-                    -- TODO
+                     -- 2. if stream doesn't exist - create new one with version 0
+                     IF NOT EXISTS (SELECT 1 FROM streams s WHERE s.id = stream_id) THEN
+                         INSERT INTO streams (id, type, version) VALUES (stream_id, stream_type, 0);
+                     END IF;
 
-                    -- 3. check optimistic concurrency - return false if expected stream version is different than stream version
-                    -- TODO
+                     -- 3. check optimistic concurrency - return false if expected stream version is different than stream version
+                     IF stream_version <> expected_stream_version THEN
+                        RETURN FALSE;
+                     END IF;
 
-                    -- 4. increment stream_version
-                    -- TODO
+                     -- 4. increment stream_version
+                     SELECT version INTO stream_version FROM streams s WHERE s.id = stream_id;
+                     stream_version := stream_version + 1;
 
-                    -- 5. append event to events table
-                    -- TODO
+                     -- 5. append event to events table
+                     INSERT INTO events (id, data, stream_id, type, version)
+                             VALUES ((select s.id from streams s where s.id = stream_id), data, stream_id, stream_type, stream_version);
 
-                    -- 6. update stream version in stream table
-                    -- TODO
+                     -- 6. update stream version in stream table
+                     UPDATE streams s SET version = stream_version WHERE s.id = stream_id;
 
-                    RETURN TRUE;
-                END;
-                $$;";
+                     RETURN TRUE;
+                 END;
+                 $$;";
             databaseConnection.Execute(AppendEventFunctionSQL);
         }
 

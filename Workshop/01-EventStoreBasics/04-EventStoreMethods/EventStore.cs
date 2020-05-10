@@ -1,9 +1,12 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Data;
+using System.Linq;
 using Dapper;
 using Newtonsoft.Json;
 using Npgsql;
+using JsonSerializer = System.Text.Json.JsonSerializer;
 
 namespace EventStoreBasics
 {
@@ -26,14 +29,17 @@ namespace EventStoreBasics
             CreateAppendEventFunction();
         }
 
-        public bool AppendEvent<TStream>(Guid streamId, object @event, long? expectedVersion = null)
+        public bool AppendEvent<TStream>(
+            Guid streamId,
+            object @event,
+            long? expectedVersion = null)
         {
             return databaseConnection.QuerySingle<bool>(
                 "SELECT append_event(@Id, @Data::jsonb, @Type, @StreamId, @StreamType, @ExpectedVersion)",
                 new
                 {
                     Id = Guid.NewGuid(),
-                    Data = JsonConvert.SerializeObject(@event),
+                    Data = JsonSerializer.Serialize(@event),
                     Type = @event.GetType().AssemblyQualifiedName,
                     StreamId = streamId,
                     StreamType = typeof(TStream).AssemblyQualifiedName,
@@ -45,12 +51,28 @@ namespace EventStoreBasics
 
         public StreamState GetStreamState(Guid streamId)
         {
-            throw new NotImplementedException("Return here stream state, so: id, type and version.");
+            var streamData = databaseConnection.QuerySingle(
+                "SELECT id, type, version FROM streams WHERE id = @streamId", new
+                {
+                    streamId
+                });
+
+            var streamState = new StreamState(streamData.id, Type.GetType(streamData.type), streamData.version);
+
+            return streamState;
         }
 
         public IEnumerable GetEvents(Guid streamId)
         {
-            throw new NotImplementedException("Return here stream events stored in database.");
+            return databaseConnection.Query<dynamic>("SELECT data, type from events where stream_id = @streamId",
+                new
+                {
+                    streamId
+                }).Select(@event =>
+                JsonConvert.DeserializeObject(
+                    @event.data,
+                    Type.GetType(@event.type)
+                )).ToList();
         }
 
         private void CreateStreamsTable()
